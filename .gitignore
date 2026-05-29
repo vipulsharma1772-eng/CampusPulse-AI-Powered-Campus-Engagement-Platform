@@ -1,0 +1,10 @@
+node_modules/
+.env
+dist/
+build/
+.cache/
+target/
+.idea/
+.vscode/
+*.class
+.DS_Store
