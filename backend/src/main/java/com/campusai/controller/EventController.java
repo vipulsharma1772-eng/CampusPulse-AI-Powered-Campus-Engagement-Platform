@@ -87,31 +87,44 @@ public class EventController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Event>> getAllEvents() {
-        return ResponseEntity.ok(eventRepository.findAll());
+    public ResponseEntity<List<Event>> getAllEvents(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+        List<Event> allEvents = eventRepository.findAll();
+        List<Event> filtered = allEvents.stream()
+                .filter(e -> "PUBLISHED".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null ||
+                             (userDetails != null && userDetails.getId().equals(e.getOrganizerId())))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(filtered);
     }
 
     @GetMapping("/upcoming")
-    public ResponseEntity<List<Event>> getUpcomingEvents() {
+    public ResponseEntity<List<Event>> getUpcomingEvents(@AuthenticationPrincipal UserDetailsImpl userDetails) {
         List<Event> allEvents = eventRepository.findAll();
         List<Event> upcoming = allEvents.stream()
+                .filter(e -> "PUBLISHED".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null ||
+                             (userDetails != null && userDetails.getId().equals(e.getOrganizerId())))
                 .filter(e -> e.getDate() != null && e.getDate().isAfter(LocalDateTime.now()))
                 .collect(Collectors.toList());
         return ResponseEntity.ok(upcoming);
     }
 
     @GetMapping("/trending")
-    public ResponseEntity<List<Event>> getTrendingEvents() {
-        // Mock trending: just returning some events
+    public ResponseEntity<List<Event>> getTrendingEvents(@AuthenticationPrincipal UserDetailsImpl userDetails) {
         List<Event> allEvents = eventRepository.findAll();
-        return ResponseEntity.ok(allEvents.size() > 5 ? allEvents.subList(0, 5) : allEvents);
+        List<Event> filtered = allEvents.stream()
+                .filter(e -> "PUBLISHED".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null ||
+                             (userDetails != null && userDetails.getId().equals(e.getOrganizerId())))
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(filtered.size() > 5 ? filtered.subList(0, 5) : filtered);
     }
 
     @GetMapping("/recommended")
-    public ResponseEntity<List<Event>> getRecommendedEvents() {
-        // Real recommendation logic should go here or in GeminiService
+    public ResponseEntity<List<Event>> getRecommendedEvents(@AuthenticationPrincipal UserDetailsImpl userDetails) {
         List<Event> allEvents = eventRepository.findAll();
-        List<Event> recommended = allEvents.size() > 4 ? allEvents.subList(0, 4) : allEvents;
+        List<Event> filtered = allEvents.stream()
+                .filter(e -> "PUBLISHED".equalsIgnoreCase(e.getStatus()) || e.getStatus() == null ||
+                             (userDetails != null && userDetails.getId().equals(e.getOrganizerId())))
+                .collect(Collectors.toList());
+        List<Event> recommended = filtered.size() > 4 ? filtered.subList(0, 4) : filtered;
         return ResponseEntity.ok(recommended);
     }
 
@@ -165,9 +178,17 @@ public class EventController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Event> getEventById(@PathVariable Long id) {
+    public ResponseEntity<?> getEventById(@PathVariable Long id, @AuthenticationPrincipal UserDetailsImpl userDetails) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found with id: " + id));
+        boolean isPublished = "PUBLISHED".equalsIgnoreCase(event.getStatus()) || event.getStatus() == null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isOrganizer = userDetails != null && userDetails.getId().equals(event.getOrganizerId());
+
+        if (!isPublished && !isAdmin && !isOrganizer) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).body("Forbidden: Event is not published.");
+        }
         return ResponseEntity.ok(event);
     }
 
@@ -188,6 +209,15 @@ public class EventController {
     public ResponseEntity<?> registerForEvent(@PathVariable Long id, @AuthenticationPrincipal UserDetailsImpl userDetails) {
         Event event = eventRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Event not found with id: " + id));
+
+        boolean isPublished = "PUBLISHED".equalsIgnoreCase(event.getStatus()) || event.getStatus() == null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isOrganizer = userDetails != null && userDetails.getId().equals(event.getOrganizerId());
+
+        if (!isPublished && !isAdmin && !isOrganizer) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).body("Forbidden: Cannot register for an event that is not published.");
+        }
 
         if (registrationRepository.findByUserIdAndEventId(userDetails.getId(), id).isPresent()) {
             return ResponseEntity.badRequest().body("Already registered for this event");

@@ -41,11 +41,16 @@ public class Event {
     private String organizerName;
     private String organizerEmail;
 
+    private String status;
+
     @Column(updatable = false)
     private LocalDateTime createdAt;
 
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();
+        if (status == null) {
+            status = "PENDING";
+        }
     }
 }

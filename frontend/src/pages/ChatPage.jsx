@@ -12,6 +12,7 @@ const ChatPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [messageText, setMessageText] = useState('');
+  const [showBlockModal, setShowBlockModal] = useState(false);
   
   // Image Upload States
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -131,11 +132,11 @@ const ChatPage = () => {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!messageText.trim() || !activeChat || sending) return;
-
+ 
     const textToSend = messageText.trim();
     setMessageText('');
     setSending(true);
-
+ 
     try {
       const savedMsg = await chatService.sendMessage(activeChat.chatId, textToSend);
       setMessages(prev => [...prev, savedMsg]);
@@ -145,6 +146,37 @@ const ChatPage = () => {
       alert("Failed to send message.");
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!activeChat) return;
+    try {
+      await chatService.blockUser(activeChat.otherUser.id);
+      setActiveChat(prev => ({
+        ...prev,
+        isBlocked: true
+      }));
+      setShowBlockModal(false);
+      fetchRecentChats(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to block user.");
+    }
+  };
+
+  const handleUnblockUserLocally = async () => {
+    if (!activeChat) return;
+    try {
+      await chatService.unblockUser(activeChat.otherUser.id);
+      setActiveChat(prev => ({
+        ...prev,
+        isBlocked: false
+      }));
+      fetchRecentChats(false);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to unblock user.");
     }
   };
 
@@ -477,9 +509,33 @@ const ChatPage = () => {
                     <small className="text-muted">@{activeChat.otherUser.username} • {activeChat.otherUser.role}</small>
                   </div>
                 </div>
-                <span className="badge bg-secondary bg-opacity-20 text-muted" style={{ border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <i className="bi bi-shield-lock me-1"></i>Private Session
-                </span>
+                <div className="d-flex align-items-center gap-2">
+                  {activeChat.isBlocked && (
+                    <span className="badge bg-danger bg-opacity-20 text-danger rounded-pill" style={{ border: '1px solid rgba(220, 53, 69, 0.25)', padding: '6px 12px' }}>
+                      <i className="bi bi-shield-fill-x me-1"></i>User Blocked
+                    </span>
+                  )}
+                  {!activeChat.isBlocked ? (
+                    <button 
+                      onClick={() => setShowBlockModal(true)}
+                      className="btn btn-outline-danger btn-sm rounded-pill d-flex align-items-center gap-1 py-1 px-3"
+                      style={{ border: '1px solid rgba(220, 53, 69, 0.4)', background: 'rgba(220, 53, 69, 0.05)', color: '#ef4444', fontSize: '0.78rem' }}
+                    >
+                      <i className="bi bi-slash-circle me-1"></i>Block User
+                    </button>
+                  ) : (
+                    <button 
+                      onClick={handleUnblockUserLocally}
+                      className="btn btn-outline-success btn-sm rounded-pill d-flex align-items-center gap-1 py-1 px-3"
+                      style={{ border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.05)', color: '#10b981', fontSize: '0.78rem' }}
+                    >
+                      <i className="bi bi-shield-fill-check me-1"></i>Unblock
+                    </button>
+                  )}
+                  <span className="badge bg-secondary bg-opacity-20 text-muted d-none d-md-inline-block" style={{ border: '1px solid rgba(255,255,255,0.05)', padding: '6px 12px' }}>
+                    <i className="bi bi-shield-lock me-1"></i>Private Session
+                  </span>
+                </div>
               </div>
 
               {/* Chat Scrollbody */}
@@ -522,49 +578,66 @@ const ChatPage = () => {
               </div>
 
               {/* Input Typing Area */}
-              <div className="chat-input-wrapper">
-                <form onSubmit={handleSendMessage} className="d-flex gap-2">
-                  <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    style={{ display: 'none' }} 
-                    accept="image/jpeg, image/png, image/webp" 
-                    onChange={handleImageUpload} 
-                  />
-                  <button 
-                    type="button" 
-                    className="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center"
-                    style={{ width: '52px', height: '52px', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={uploadingImage || sending}
-                  >
-                    {uploadingImage ? (
-                      <span className="spinner-border spinner-border-sm text-muted"></span>
-                    ) : (
-                      <i className="bi bi-image fs-5 text-muted"></i>
-                    )}
+              {activeChat.isBlocked ? (
+                <div className="chat-input-wrapper py-4 px-4 text-center rounded-3" style={{ border: '1px dashed rgba(220, 53, 69, 0.25)', background: 'rgba(220, 53, 69, 0.03)' }}>
+                  <i className="bi bi-shield-fill-x text-danger fs-3 mb-2 d-block"></i>
+                  <span className="text-danger fw-bold d-block mb-1" style={{ fontSize: '0.92rem' }}>You have blocked this user.</span>
+                  <small className="text-muted d-block mb-3">You must unblock this user to send and receive new messages.</small>
+                  <button className="btn btn-outline-success btn-sm rounded-pill px-4 py-2" onClick={handleUnblockUserLocally} style={{ border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.05)', color: '#10b981' }}>
+                    <i className="bi bi-shield-fill-check me-2"></i>Unblock User
                   </button>
-                  <input 
-                    type="text" 
-                    className="form-control glow-input bg-transparent text-light border-secondary border-opacity-30 py-3 px-4 rounded-pill shadow-none"
-                    placeholder="Type a private message..."
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                  />
-                  <button 
-                    type="submit" 
-                    className="neon-btn rounded-circle d-flex align-items-center justify-content-center"
-                    style={{ width: '52px', height: '52px', flexShrink: 0, padding: 0 }}
-                    disabled={(!messageText.trim() && !uploadingImage) || sending}
-                  >
-                    {sending ? (
-                      <span className="spinner-border spinner-border-sm"></span>
-                    ) : (
-                      <i className="bi bi-send-fill fs-5" style={{ transform: 'translateX(1px)' }}></i>
-                    )}
-                  </button>
-                </form>
-              </div>
+                </div>
+              ) : activeChat.hasBlockedMe ? (
+                <div className="chat-input-wrapper py-4 px-4 text-center rounded-3" style={{ border: '1px dashed rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.01)' }}>
+                  <i className="bi bi-lock-fill text-muted fs-3 mb-2 d-block"></i>
+                  <span className="text-muted fw-bold d-block mb-1" style={{ fontSize: '0.92rem' }}>Messaging is temporarily unavailable.</span>
+                  <small className="text-muted d-block">You cannot send messages to this user at this time.</small>
+                </div>
+              ) : (
+                <div className="chat-input-wrapper">
+                  <form onSubmit={handleSendMessage} className="d-flex gap-2">
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      style={{ display: 'none' }} 
+                      accept="image/jpeg, image/png, image/webp" 
+                      onChange={handleImageUpload} 
+                    />
+                    <button 
+                      type="button" 
+                      className="btn btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: '52px', height: '52px', flexShrink: 0, border: '1px solid rgba(255,255,255,0.1)' }}
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingImage || sending}
+                    >
+                      {uploadingImage ? (
+                        <span className="spinner-border spinner-border-sm text-muted"></span>
+                      ) : (
+                        <i className="bi bi-image fs-5 text-muted"></i>
+                      )}
+                    </button>
+                    <input 
+                      type="text" 
+                      className="form-control glow-input bg-transparent text-light border-secondary border-opacity-30 py-3 px-4 rounded-pill shadow-none"
+                      placeholder="Type a private message..."
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                    />
+                    <button 
+                      type="submit" 
+                      className="neon-btn rounded-circle d-flex align-items-center justify-content-center"
+                      style={{ width: '52px', height: '52px', flexShrink: 0, padding: 0 }}
+                      disabled={(!messageText.trim() && !uploadingImage) || sending}
+                    >
+                      {sending ? (
+                        <span className="spinner-border spinner-border-sm"></span>
+                      ) : (
+                        <i className="bi bi-send-fill fs-5" style={{ transform: 'translateX(1px)' }}></i>
+                      )}
+                    </button>
+                  </form>
+                </div>
+              )}
             </>
           ) : (
             <div className="d-flex flex-column align-items-center justify-content-center m-auto text-center py-5 px-3">
@@ -602,6 +675,42 @@ const ChatPage = () => {
               style={{ maxHeight: '90vh', maxWidth: '90vw' }} 
               onClick={(e) => e.stopPropagation()}
             />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Block User Confirmation Modal Overlay */}
+      <AnimatePresence>
+        {showBlockModal && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="position-fixed top-0 start-0 w-100 h-100 d-flex align-items-center justify-content-center"
+            style={{ background: 'rgba(0,0,0,0.85)', zIndex: 1080, backdropFilter: 'blur(8px)' }}
+          >
+            <motion.div 
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="glass-card p-5 text-center w-100 mx-3"
+              style={{ maxWidth: '420px', border: '1px solid rgba(220, 53, 69, 0.25)' }}
+            >
+              <div className="rounded-circle p-3 d-inline-block mb-4" style={{ background: 'rgba(220, 53, 69, 0.1)', border: '1px solid rgba(220, 53, 69, 0.2)' }}>
+                <i className="bi bi-shield-fill-x fs-1 text-danger"></i>
+              </div>
+              <h4 className="fw-bold text-light mb-3">Block User</h4>
+              <p className="text-muted small mb-4">
+                Are you sure you want to block this user? You will no longer receive private messages from them.
+              </p>
+              <div className="d-flex gap-3">
+                <button className="btn btn-outline-secondary rounded-pill w-100 py-2 text-light border-secondary border-opacity-35" onClick={() => setShowBlockModal(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-danger rounded-pill w-100 py-2" onClick={handleBlockUser} style={{ background: 'linear-gradient(135deg, #dc3545 0%, #bd2130 100%)', border: 'none', boxShadow: '0 0 15px rgba(220, 53, 69, 0.3)' }}>
+                  Block
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

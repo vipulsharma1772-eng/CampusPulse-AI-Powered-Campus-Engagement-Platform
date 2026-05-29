@@ -52,6 +52,12 @@ public class ClubController {
         }
 
         for (Club club : clubs) {
+            boolean isPublished = "PUBLISHED".equalsIgnoreCase(club.getStatus()) || club.getStatus() == null;
+            boolean isCreator = userDetails != null && userDetails.getId().equals(club.getCreatedBy());
+            if (!isPublished && !isCreator) {
+                continue;
+            }
+
             java.util.Map<String, Object> map = new java.util.HashMap<>();
             map.put("id", club.getId());
             map.put("name", club.getName());
@@ -126,6 +132,16 @@ public class ClubController {
             return ResponseEntity.badRequest().body("Club not found");
         }
 
+        Club c = club.get();
+        boolean isPublished = "PUBLISHED".equalsIgnoreCase(c.getStatus()) || c.getStatus() == null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isCreator = userDetails != null && userDetails.getId().equals(c.getCreatedBy());
+
+        if (!isPublished && !isAdmin && !isCreator) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).body("Forbidden: Cannot join a club that is not published.");
+        }
+
         if (clubMemberRepository.findByUserIdAndClubId(userDetails.getId(), id).isPresent()) {
             return ResponseEntity.badRequest().body("Already a member of this club");
         }
@@ -156,6 +172,14 @@ public class ClubController {
         if (clubOpt.isEmpty()) return ResponseEntity.notFound().build();
         
         Club club = clubOpt.get();
+        boolean isPublished = "PUBLISHED".equalsIgnoreCase(club.getStatus()) || club.getStatus() == null;
+        boolean isAdmin = userDetails != null && userDetails.getAuthorities().stream()
+                .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+        boolean isCreator = userDetails != null && userDetails.getId().equals(club.getCreatedBy());
+
+        if (!isPublished && !isAdmin && !isCreator) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).body("Forbidden: Club is not published.");
+        }
         List<ClubMember> members = clubMemberRepository.findByClubId(id);
         long realMembers = members.stream()
                 .filter(m -> !m.getUserId().equals(club.getCreatedBy()))

@@ -86,7 +86,11 @@ public class AuthController {
         } else {
             switch (reqRole.toLowerCase()) {
                 case "admin":
-                    user.setRole(User.Role.ADMIN);
+                    if ("vipulsharma123@gmail.com".equalsIgnoreCase(signUpRequest.getEmail())) {
+                        user.setRole(User.Role.ADMIN);
+                    } else {
+                        user.setRole(User.Role.STUDENT);
+                    }
                     break;
                 case "organizer":
                     user.setRole(User.Role.ORGANIZER);

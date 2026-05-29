@@ -44,4 +44,13 @@ public class Club {
     
     @Column(nullable = false)
     private Long createdBy;
+
+    private String status;
+
+    @PrePersist
+    protected void onCreate() {
+        if (status == null) {
+            status = "PENDING";
+        }
+    }
 }

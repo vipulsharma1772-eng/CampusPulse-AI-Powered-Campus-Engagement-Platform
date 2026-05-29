@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import userService from '../services/userService';
+import chatService from '../services/chatService';
 
 const SettingsPage = () => {
   const [activeTab, setActiveTab] = useState('account');
@@ -13,6 +14,39 @@ const SettingsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [loadingBlocked, setLoadingBlocked] = useState(false);
+ 
+  useEffect(() => {
+    if (activeTab === 'blocked') {
+      fetchBlockedUsers();
+    }
+  }, [activeTab]);
+ 
+  const fetchBlockedUsers = async () => {
+    setLoadingBlocked(true);
+    try {
+      const data = await chatService.getBlockedUsers();
+      setBlockedUsers(data || []);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load blocked users.');
+    } finally {
+      setLoadingBlocked(false);
+    }
+  };
+ 
+  const handleUnblockUser = async (userId) => {
+    try {
+      await chatService.unblockUser(userId);
+      setBlockedUsers(prev => prev.filter(user => user.id !== userId));
+      setSuccess('User unblocked successfully.');
+      setTimeout(() => setSuccess(''), 4000);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to unblock user.');
+    }
+  };
 
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
@@ -81,6 +115,9 @@ const SettingsPage = () => {
                 </Link>
                 <button className={`nav-link text-start py-3 mb-2 ${activeTab === 'notifications' ? 'active neon-btn-outline border-0 bg-primary text-white' : 'text-light'}`} onClick={() => setActiveTab('notifications')}>
                   <i className="bi bi-bell me-2"></i> Notifications
+                </button>
+                <button className={`nav-link text-start py-3 mb-2 ${activeTab === 'blocked' ? 'active neon-btn-outline border-0 bg-primary text-white' : 'text-light'}`} onClick={() => setActiveTab('blocked')}>
+                  <i className="bi bi-shield-x me-2"></i> Blocked Users
                 </button>
                 <button className={`nav-link text-start py-3 mb-2 ${activeTab === 'theme' ? 'active neon-btn-outline border-0 bg-primary text-white' : 'text-light'}`} onClick={() => setActiveTab('theme')}>
                   <i className="bi bi-palette me-2"></i> Appearance
@@ -202,6 +239,51 @@ const SettingsPage = () => {
                       </div>
                     </div>
                   </div>
+                </motion.div>
+              )}
+
+              {activeTab === 'blocked' && (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                  <h4 className="fw-bold mb-4 border-bottom border-secondary pb-3">Blocked Users</h4>
+                  
+                  {error && <div className="alert alert-danger">{error}</div>}
+                  {success && <div className="alert alert-success d-flex align-items-center"><i className="bi bi-check-circle-fill me-2 fs-5"></i>{success}</div>}
+
+                  {loadingBlocked ? (
+                    <div className="text-center py-5"><div className="spinner-border text-primary"></div></div>
+                  ) : blockedUsers.length === 0 ? (
+                    <div className="text-center py-5 text-muted">
+                      <i className="bi bi-shield-check display-3 text-gradient d-block mb-3"></i>
+                      <h5 className="fw-bold text-light">No blocked users</h5>
+                      <p className="mb-0 small">Users you block in private chats will appear here.</p>
+                    </div>
+                  ) : (
+                    <div className="d-flex flex-column gap-3">
+                      {blockedUsers.map(u => (
+                        <div key={u.id} className="d-flex align-items-center justify-content-between p-3 rounded" style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                          <div className="d-flex align-items-center gap-3">
+                            <img 
+                              src={u.profileImage || `https://ui-avatars.com/api/?name=${u.name}&background=6C63FF&color=fff`} 
+                              alt={u.name}
+                              className="rounded-circle"
+                              style={{ width: '42px', height: '42px', border: '1px solid rgba(255, 255, 255, 0.1)' }}
+                            />
+                            <div>
+                              <h6 className="fw-bold text-light m-0">{u.name}</h6>
+                              <small className="text-muted">@{u.username}</small>
+                            </div>
+                          </div>
+                          <button 
+                            className="btn btn-outline-success btn-sm rounded-pill px-4 py-2" 
+                            style={{ border: '1px solid rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.05)', color: '#10b981' }}
+                            onClick={() => handleUnblockUser(u.id)}
+                          >
+                            <i className="bi bi-shield-fill-check me-2"></i>Unblock
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </motion.div>
               )}
 

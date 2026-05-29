@@ -30,6 +30,9 @@ public class ChatController {
     @Autowired
     UserRepository userRepository;
 
+    @Autowired
+    com.campusai.repository.BlockedUserRepository blockedUserRepository;
+
     @GetMapping("/recent")
     public ResponseEntity<?> getRecentChats(@AuthenticationPrincipal UserDetailsImpl userDetails) {
         if (userDetails == null) {
@@ -42,6 +45,12 @@ public class ChatController {
 
         for (Chat chat : chats) {
             Long otherUserId = chat.getUser1Id().equals(myId) ? chat.getUser2Id() : chat.getUser1Id();
+            
+            // Filter: if I have blocked them, do not show in recent list (Requirement 4)
+            if (blockedUserRepository.existsByBlockerIdAndBlockedId(myId, otherUserId)) {
+                continue;
+            }
+
             Optional<User> otherUserOpt = userRepository.findById(otherUserId);
             if (otherUserOpt.isPresent()) {
                 User otherUser = otherUserOpt.get();
@@ -53,6 +62,11 @@ public class ChatController {
                 // Unread message count
                 long unreadCount = messageRepository.countByChatIdAndReceiverIdAndIsRead(chat.getId(), myId, false);
                 item.put("unreadCount", unreadCount);
+
+                boolean isBlocked = blockedUserRepository.existsByBlockerIdAndBlockedId(myId, otherUserId);
+                boolean hasBlockedMe = blockedUserRepository.existsByBlockerIdAndBlockedId(otherUserId, myId);
+                item.put("isBlocked", isBlocked);
+                item.put("hasBlockedMe", hasBlockedMe);
 
                 // Other user profile
                 Map<String, Object> profile = new HashMap<>();
@@ -102,6 +116,11 @@ public class ChatController {
         result.put("chatId", chat.getId());
         result.put("lastMessageContent", chat.getLastMessageContent());
         result.put("lastMessageTimestamp", chat.getLastMessageTimestamp());
+
+        boolean isBlocked = blockedUserRepository.existsByBlockerIdAndBlockedId(myId, otherUser.getId());
+        boolean hasBlockedMe = blockedUserRepository.existsByBlockerIdAndBlockedId(otherUser.getId(), myId);
+        result.put("isBlocked", isBlocked);
+        result.put("hasBlockedMe", hasBlockedMe);
 
         Map<String, Object> profile = new HashMap<>();
         profile.put("id", otherUser.getId());
@@ -177,6 +196,12 @@ public class ChatController {
         }
 
         Long receiverId = chat.getUser1Id().equals(myId) ? chat.getUser2Id() : chat.getUser1Id();
+ 
+        // Block Guard: Prevent message creation when sender is blocked by receiver
+        if (blockedUserRepository.existsByBlockerIdAndBlockedId(receiverId, myId)) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body("Forbidden: You have been blocked by this user.");
+        }
 
         Message message = Message.builder()
                 .chatId(chatId)
@@ -196,5 +221,77 @@ public class ChatController {
         chatRepository.save(chat);
 
         return ResponseEntity.ok(savedMessage);
+    }
+
+    @PostMapping("/block/{userId}")
+    public ResponseEntity<?> blockUser(@PathVariable Long userId, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        Long myId = userDetails.getId();
+
+        if (myId.equals(userId)) {
+            return ResponseEntity.badRequest().body("You cannot block yourself");
+        }
+
+        if (!userRepository.existsById(userId)) {
+            return ResponseEntity.badRequest().body("User not found");
+        }
+
+        if (blockedUserRepository.findByBlockerIdAndBlockedId(myId, userId).isEmpty()) {
+            com.campusai.model.BlockedUser block = com.campusai.model.BlockedUser.builder()
+                    .blockerId(myId)
+                    .blockedId(userId)
+                    .build();
+            blockedUserRepository.save(block);
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "User blocked successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/unblock/{userId}")
+    public ResponseEntity<?> unblockUser(@PathVariable Long userId, @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        Long myId = userDetails.getId();
+
+        Optional<com.campusai.model.BlockedUser> blockOpt = blockedUserRepository.findByBlockerIdAndBlockedId(myId, userId);
+        if (blockOpt.isPresent()) {
+            blockedUserRepository.delete(blockOpt.get());
+        }
+
+        Map<String, String> response = new HashMap<>();
+        response.put("message", "User unblocked successfully");
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/blocked")
+    public ResponseEntity<?> getBlockedUsers(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+        if (userDetails == null) {
+            return ResponseEntity.status(401).body("Unauthorized");
+        }
+        Long myId = userDetails.getId();
+
+        List<com.campusai.model.BlockedUser> blocks = blockedUserRepository.findByBlockerId(myId);
+        List<Map<String, Object>> responseList = new ArrayList<>();
+
+        for (com.campusai.model.BlockedUser block : blocks) {
+            Optional<User> userOpt = userRepository.findById(block.getBlockedId());
+            if (userOpt.isPresent()) {
+                User user = userOpt.get();
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", user.getId());
+                item.put("name", user.getName());
+                item.put("username", user.getUsername());
+                item.put("profileImage", user.getProfileImage());
+                item.put("blockedAt", block.getBlockedAt());
+                responseList.add(item);
+            }
+        }
+
+        return ResponseEntity.ok(responseList);
     }
 }

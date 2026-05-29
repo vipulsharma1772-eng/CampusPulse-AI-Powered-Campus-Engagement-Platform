@@ -29,10 +29,28 @@ const searchUsers = async (query) => {
   return response.data;
 };
 
+const blockUser = async (userId) => {
+  const response = await api.post(`/chats/block/${userId}`);
+  return response.data;
+};
+
+const unblockUser = async (userId) => {
+  const response = await api.delete(`/chats/unblock/${userId}`);
+  return response.data;
+};
+
+const getBlockedUsers = async () => {
+  const response = await api.get('/chats/blocked');
+  return response.data;
+};
+
 export default {
   getRecentChats,
   openChat,
   getMessages,
   sendMessage,
   searchUsers,
+  blockUser,
+  unblockUser,
+  getBlockedUsers
 };

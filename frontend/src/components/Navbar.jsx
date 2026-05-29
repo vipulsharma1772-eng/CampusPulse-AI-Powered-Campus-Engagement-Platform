@@ -164,12 +164,23 @@ const Navbar = ({ publicMode }) => {
                       Profile
                     </Link>
                   </li>
+                  {user?.role === 'ROLE_ADMIN' && (
+                    <li className="nav-item">
+                      <Link
+                        className={`nav-link glow-nav-link text-light${isActive('/admin') ? ' active' : ''}`}
+                        style={isActive('/admin') ? {
+                          color: '#fef08a',
+                          background: 'rgba(253, 224, 71, 0.12)',
+                          textShadow: '0 0 8px rgba(253, 224, 71, 0.8)',
+                          border: '1px solid rgba(253, 224, 71, 0.35)'
+                        } : {}}
+                        to="/admin"
+                      >
+                        Admin Panel
+                      </Link>
+                    </li>
+                  )}
                 </div>
-                {user?.role === 'ROLE_ADMIN' && (
-                  <li className="nav-item">
-                    <Link className="nav-link glow-nav-link text-light text-gradient" to="/admin">Admin Panel</Link>
-                  </li>
-                )}
 
                 {/* React-controlled dropdown — no Bootstrap JS dependency */}
                 <li className="nav-item dropdown ms-lg-2 mt-2 mt-lg-0" ref={dropdownRef} style={{ position: 'relative' }}>
