@@ -1,0 +1,35 @@
+# ==============================================================
+# Render Blueprint Specification for CampusPulse AI Platform
+# ==============================================================
+# This Blueprint file allows you to deploy the entire unified 
+# application (React frontend + Spring Boot backend) in a single click
+# with minimum manual setup.
+# ==============================================================
+
+services:
+  - type: web
+    name: campuspulse-platform
+    env: docker
+    plan: free # Deploys on Render's free tier
+    numInstances: 1
+
+    # Mount a persistent disk to ensure H2 database files and user uploads 
+    # survive restarts, updates, and redeployments seamlessly.
+    disk:
+      name: campuspulse-volume
+      mountPath: /app/data
+      sizeGB: 1
+
+    # Environment variables configuration
+    envVars:
+      - key: PORT
+        value: "8080"
+
+      # Prompt the user for their Gemini AI key during first setup
+      - key: GEMINI_API_KEY
+        sync: false
+        placeholder: "Enter your Gemini AI API Key (e.g. AIzaSy...)"
+
+      # Automatically generate a cryptographically secure random secret for JWT signing
+      - key: JWT_SECRET
+        generateValue: true

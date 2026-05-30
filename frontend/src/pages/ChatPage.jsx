@@ -553,7 +553,7 @@ const ChatPage = () => {
                         <div className={`message-bubble ${isSentByMe ? 'sent' : 'received'}`} style={{ padding: msg.imageUrl && msg.content === '[Image]' ? '4px' : undefined }}>
                           {msg.imageUrl && (
                             <img 
-                              src={`http://localhost:8080${msg.imageUrl}`} 
+                              src={msg.imageUrl} 
                               alt="Attached media" 
                               className="img-fluid rounded shadow-sm" 
                               style={{ 
@@ -562,7 +562,7 @@ const ChatPage = () => {
                                 display: 'block',
                                 marginBottom: msg.content !== '[Image]' ? '10px' : '0' 
                               }}
-                              onClick={() => setPreviewImage(`http://localhost:8080${msg.imageUrl}`)}
+                              onClick={() => setPreviewImage(msg.imageUrl)}
                             />
                           )}
                           {msg.content !== '[Image]' && msg.content}
