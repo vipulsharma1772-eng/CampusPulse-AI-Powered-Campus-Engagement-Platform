@@ -17,7 +17,30 @@ public class JwtUtils {
     private int jwtExpirationMs;
 
     private java.security.Key key() {
-        return io.jsonwebtoken.security.Keys.hmacShaKeyFor(io.jsonwebtoken.io.Decoders.BASE64.decode(jwtSecret));
+        byte[] keyBytes;
+        try {
+            // Attempt to Base64-decode the secret key first
+            keyBytes = io.jsonwebtoken.io.Decoders.BASE64.decode(jwtSecret);
+            // HS512 strictly requires a key of at least 512 bits (64 bytes).
+            // If the decoded key is too small, hash it using SHA-512.
+            if (keyBytes.length < 64) {
+                keyBytes = getSha512Bytes(jwtSecret);
+            }
+        } catch (Exception e) {
+            // If decoding fails (e.g. secret is a plain text password/string),
+            // hash it using SHA-512 to guarantee exactly 512 bits of key material.
+            keyBytes = getSha512Bytes(jwtSecret);
+        }
+        return io.jsonwebtoken.security.Keys.hmacShaKeyFor(keyBytes);
+    }
+
+    private byte[] getSha512Bytes(String input) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-512");
+            return digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-512 algorithm is not available in JRE", e);
+        }
     }
 
     public String generateJwtToken(Authentication authentication) {
