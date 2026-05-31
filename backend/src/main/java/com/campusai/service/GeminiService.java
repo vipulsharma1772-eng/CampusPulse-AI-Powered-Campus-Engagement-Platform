@@ -32,8 +32,8 @@ public class GeminiService {
     @Autowired
     private ClubRepository clubRepository;
 
-    // Use standard, official 'gemini-1.5-flash' model
-    private final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
+    // Shift to the stable 'v1' API endpoint for gemini-1.5-flash
+    private final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=";
 
     public String generateResponse(String userMessage) {
         try {
@@ -76,12 +76,25 @@ public class GeminiService {
             ObjectMapper mapper = new ObjectMapper();
             String jsonPayload = mapper.writeValueAsString(payloadMap);
 
+            // Verbose logging of the Request Details
+            System.out.println("==============================================================");
+            System.out.println("[GEMINI AI REQUEST]");
+            System.out.println("Target URL: " + GEMINI_API_URL + (geminiApiKey != null && geminiApiKey.length() > 8 ? geminiApiKey.substring(0, 8) + "..." : "null/empty"));
+            System.out.println("Payload: " + jsonPayload);
+            System.out.println("==============================================================");
+
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<String> requestEntity = new HttpEntity<>(jsonPayload, headers);
 
             RestTemplate restTemplate = new RestTemplate();
             String response = restTemplate.postForObject(GEMINI_API_URL + geminiApiKey, requestEntity, String.class);
+
+            // Verbose logging of the Response Details
+            System.out.println("==============================================================");
+            System.out.println("[GEMINI AI RESPONSE]");
+            System.out.println("Raw Response Body: " + response);
+            System.out.println("==============================================================");
 
             // Robust JSON parsing using Jackson JsonNode
             if (response != null) {
@@ -101,7 +114,9 @@ public class GeminiService {
 
         } catch (Exception e) {
             e.printStackTrace();
-            return "I'm sorry, I am having trouble connecting to my neural network right now. Please try again later.";
+            System.err.println("[GEMINI AI ERROR]: " + e.getMessage());
+            // Bubble up the actual Exception to the chat interface for easy debugging
+            return "AI Service Error: " + e.getMessage() + " (" + e.getClass().getSimpleName() + ")";
         }
     }
 }
