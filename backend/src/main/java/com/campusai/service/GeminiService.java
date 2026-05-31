@@ -4,6 +4,8 @@ import com.campusai.model.Club;
 import com.campusai.model.Event;
 import com.campusai.repository.ClubRepository;
 import com.campusai.repository.EventRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -12,7 +14,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -27,7 +32,8 @@ public class GeminiService {
     @Autowired
     private ClubRepository clubRepository;
 
-    private final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=";
+    // Use standard, official 'gemini-1.5-flash' model
+    private final String GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=";
 
     public String generateResponse(String userMessage) {
         try {
@@ -59,11 +65,16 @@ public class GeminiService {
                     "Do NOT invent events or clubs that are not in the context. " +
                     "The user says: " + userMessage;
 
-            // Prepare HTTP Request Payload
-            String jsonPayload = String.format(
-                    "{\"contents\": [{\"parts\": [{\"text\": \"%s\"}]}]}",
-                    systemPrompt.replace("\"", "\\\"").replace("\n", " ")
-            );
+            // Prepare HTTP Request Payload using Jackson ObjectMapper (handles escaping automatically)
+            Map<String, Object> payloadMap = new HashMap<>();
+            Map<String, Object> partMap = new HashMap<>();
+            partMap.put("text", systemPrompt);
+            Map<String, Object> contentMap = new HashMap<>();
+            contentMap.put("parts", Collections.singletonList(partMap));
+            payloadMap.put("contents", Collections.singletonList(contentMap));
+
+            ObjectMapper mapper = new ObjectMapper();
+            String jsonPayload = mapper.writeValueAsString(payloadMap);
 
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
@@ -72,15 +83,18 @@ public class GeminiService {
             RestTemplate restTemplate = new RestTemplate();
             String response = restTemplate.postForObject(GEMINI_API_URL + geminiApiKey, requestEntity, String.class);
 
-            // Very basic JSON parsing without a heavy library dependency
-            // Gemini response looks like: {"candidates": [{"content": {"parts": [{"text": "Hello world!"}]}}]}
-            if (response != null && response.contains("\"text\": \"")) {
-                int startIndex = response.indexOf("\"text\": \"") + 9;
-                int endIndex = response.indexOf("\"", startIndex);
-                // Handle newlines which might be escaped as \n
-                String extractedText = response.substring(startIndex, endIndex);
-                extractedText = extractedText.replace("\\n", "\n").replace("\\\"", "\"");
-                return extractedText;
+            // Robust JSON parsing using Jackson JsonNode
+            if (response != null) {
+                JsonNode rootNode = mapper.readTree(response);
+                JsonNode textNode = rootNode.path("candidates")
+                        .path(0)
+                        .path("content")
+                        .path("parts")
+                        .path(0)
+                        .path("text");
+                if (!textNode.isMissingNode()) {
+                    return textNode.asText();
+                }
             }
 
             return "I received a response, but couldn't parse it correctly. Please try again.";
